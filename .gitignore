@@ -2,3 +2,5 @@
 /.venv/
 .env
 *.db
+/gather_project.py
+/project_context_code.txt
