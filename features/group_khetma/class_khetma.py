@@ -13,12 +13,12 @@ class Khetma:
         self.khetma_id = khetma_id
         self.number = number
         self.status = status
-        self.chapters = [Chapter(chapter, None, Chapter.chapter_status.EMPTY) for chapter in range(1, 31)] 
+        self.chapters = [Chapter(chapter_num, None, Chapter.chapter_status.EMPTY) for chapter_num in range(1, 31)] 
 
-    def get_chapter(self, chapter_num) -> Chapter:
-        for chapter in self.chapters:
-            if chapter.number == chapter_num:
-                return chapter
+    def get_chapter(self, chapter_num) -> Chapter | None:
+        if 1 <= chapter_num <= 30:
+            return self.chapters[chapter_num - 1]
+        return None
             
     def get_reserved_chapters(self) -> list[Chapter]:
         reserved_chapters = []

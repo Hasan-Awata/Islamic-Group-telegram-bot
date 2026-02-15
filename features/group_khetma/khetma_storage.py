@@ -28,22 +28,28 @@ class KhetmaStorage:
                 );
             ''')
 
-    def create_new_khetma(self, chat_id):
+    def create_new_khetma(self, chat_id) -> Khetma:
         # 1. Ensure the Parent exists (The "Safety Net")
         sql_parent = "INSERT OR IGNORE INTO chats (chat_id) VALUES (?)"
         
         # 2. Insert the Child (The actual Khetma)
         sql_child = """
             INSERT INTO khetmat (chat_id, number, status)
-            VALUES (?, number, 'ACTIVE')
+            VALUES (?, ?, 'ACTIVE')
         """
+        khetma_num = self.calc_next_khetma_number(chat_id)
 
         with self.db.connect_to_db() as conn:
             # We run both commands in ONE transaction
-            conn.execute(sql_parent, (chat_id,))
-            conn.execute(sql_child, (chat_id, self.calc_next_khetma_number(chat_id)))
+            cursor = conn.execute(sql_parent, (chat_id,))
+            cursor = conn.execute(sql_child, (chat_id, khetma_num))
+
+            khetma_id = cursor.lastrowid
+
             conn.commit()
 
+            return Khetma(khetma_id, khetma_num, Khetma.khetma_status.ACTIVE)
+        
     def get_chat_khetmat(self, chat_id, status_str: str) -> list[Khetma]:
         """Fetches ALL finished Khetmat for a specific chat as a list of khetma objects."""
         sql = """
@@ -75,28 +81,36 @@ class KhetmaStorage:
 
             return khetmat_list  # Returns a list of khetmat objetcs
 
-    def get_active_khetma(self, khetma_id, chat_id) -> Khetma | None:
-        """Fetches a certain Khetma for a specific chat."""
+    def get_khetma(self, khetma_id, chat_id, status: str) -> Khetma | None:
+        """
+        Fetches a single specific Khetma directly from the DB.
+        """
+        sql = """
+            SELECT * FROM khetmat 
+            WHERE khetma_id = ? AND chat_id = ? AND status = ?
+        """
         
-        active_khetmat_list = self.get_chat_khetmat(chat_id, "ACTIVE")
-        
-        for khetma in active_khetmat_list:
-            if khetma.khetma_id == khetma_id:
-                return khetma
-            
-        return None
+        with self.db.connect_to_db() as conn:
+            conn.row_factory = sqlite3.Row  # Access columns by name
+            cursor = conn.execute(sql, (khetma_id, chat_id, status.upper()))
+            row = cursor.fetchone()  # Get only the first result (or None)
 
-    def get_finished_khetma(self, khetma_id, chat_id) -> Khetma | None:
-        """Fetches a certain Khetma for a specific chat."""
-        
-        finished_khetmat_list = self.get_chat_khetmat(chat_id, "FINISHED") 
-        
-        for khetma in finished_khetmat_list:
-            if khetma.khetma_id == khetma_id:
-                return khetma
-            
-        return None
+            if row is None:
+                return None
 
+            # Parse the single row found
+            khetma_dict = {
+                str(row["khetma_id"]): {
+                    "number": row["number"],
+                    "status": row["status"],
+                    "empty_chapters": json.loads(row["empty_chapters"]),
+                    "reserved_chapters": json.loads(row["reserved_chapters"]),
+                    "finished_chapters": json.loads(row["finished_chapters"])
+                }
+            }
+            
+            return Khetma.from_dict(khetma_dict)
+        
     def get_available_chapters(self, chat_id) -> Dict[str, List[int]]:
         available_chapters = {}
         active_khetmat_list = self.get_chat_khetmat(chat_id, "ACTIVE")

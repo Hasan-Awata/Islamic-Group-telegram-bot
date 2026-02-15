@@ -1,14 +1,26 @@
 from telegram.ext import CommandHandler, MessageHandler, filters
 
+# Database calls
+from storage_manager import StorageManager, DATABASE
+from features.group_khetma.khetma_storage import KhetmaStorage
+
+# Local modules
 from bot_setup import bot_app
 from handlers import *
 
 def main(argv=None):
-    # print("Initializing Bot Database...")
-    # storage_manager.init_history_table()
-    # game_poetry_contest.init_poetry_contest_game_table()
-    # print("Database was initialized successfully...")
+    db_core = StorageManager(DATABASE)
+    
+    # Khetma feature storage wrapper
+    khetma_storage_engine = KhetmaStorage(db_core)
 
+    # ==================================================================
+    # INJECTIONS:
+    # We put our storage engines into the bot's "backpack" (bot_data).
+    # Now it travels with the bot everywhere.
+    # ==================================================================
+    bot_app.bot_data["khetma_storage"] = khetma_storage_engine
+    
     command_handlers()
         
     # # When user types /help -> run help_command()
