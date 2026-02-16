@@ -39,21 +39,15 @@ class Chapter:
         return self.status == self.chapter_status.FINISHED
     
     @classmethod
-    def from_dict(cls, chapter_dict: dict[str, Any]) -> Chapter:
-        
-        # Give me the next key value from the iteration over chapters dictionary
-        # which is one value (the key) since I'm only fetching one chapter dictionary at a time
-        ch_num = next(iter(chapter_dict))
-        
-        chapter_obj = Chapter(
-            int(ch_num),
-            chapter_dict[ch_num]["owner_id"],
-            chapter_dict[ch_num]["owner_username"],
-            cls.chapter_status[chapter_dict[ch_num]["status"].upper()]   
+    def from_db_row(cls, row) -> 'Chapter':
+        """Factory: Converts a DB row (sqlite3.Row) into a Chapter object."""
+        return cls(
+            number=row["number"],
+            owner_id=row["owner_id"],
+            owner_username=row["owner_username"], 
+            status=cls.chapter_status[row["status"].upper()]
         )
-
-        return chapter_obj
-
+    
     def to_dict(self) -> dict[str, Any]:
         """
         Converts this object back to: {'1': {'owner': 12345, 'status': 'RESERVED'}}

@@ -41,6 +41,11 @@ class ChapterAlreadyEmptyError(KhetmaError):
     def __init__(self, message="⚠️ هذا الجزء غير محجوز أصلاً."):
         super().__init__(message)
 
+class KhetmaNotSpecifiedError(KhetmaError):
+    """Raised when trying to finish/withdraw/cancel a chapter wihtout specifying its khetma message."""
+    def __init__(self, message="⚠️ الرجاء الرد على رسالة الختمة المقصودة"):
+        super().__init__(message)
+
 # ==========================================
 # 3. CONTEXT & STATE (Old Messages)
 # ==========================================

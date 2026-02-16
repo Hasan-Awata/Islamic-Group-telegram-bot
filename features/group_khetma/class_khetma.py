@@ -9,12 +9,19 @@ class Khetma:
         ACTIVE = "ACTIVE"
         FINISHED = "FINISHED"
     
-    def __init__(self, khetma_id, number, status=khetma_status.ACTIVE):
+    def __init__(self, khetma_id, number, status=khetma_status.ACTIVE, chapters: list[Chapter]=None):
         self.khetma_id = khetma_id
         self.number = number
         self.status = status
-        self.chapters = [Chapter(chapter_num, None, Chapter.chapter_status.EMPTY) for chapter_num in range(1, 31)] 
+        if chapters:
+            self.chapters = chapters
+        else:
+            self.chapters = [Chapter(chapter_num, None, Chapter.chapter_status.EMPTY) for chapter_num in range(1, 31)] 
 
+    @property
+    def is_finished(self):
+        return len(self.get_reserved_chapters()) == 30
+    
     def get_chapter(self, chapter_num) -> Chapter | None:
         if 1 <= chapter_num <= 30:
             return self.chapters[chapter_num - 1]
@@ -69,32 +76,15 @@ class Khetma:
         chapter.mark_empty()
 
     @classmethod
-    def from_dict(cls, khetma_dict: Dict[str, Any]) -> Khetma:
-        """
-        Pure Factory Method: Converts a raw dictionary into Khetma Object.
-        """
-        # Give me the next key value from the iteration over chapters dictionary
-        # which is one value (the key) since I'm only fetching one chapter dictionary at a time
-        khetma_id = next(iter(khetma_dict))
-
-        khetma = Khetma(
-            int(khetma_id),
-            khetma_dict[khetma_id]["number"],
-            cls.khetma_status[khetma_dict[khetma_id]["status"].upper()]
+    def from_db_row(cls, khetma_row, chapters_rows) -> 'Khetma':
+        """Factory: Converts a DB row + List of Chapter rows into a Khetma object."""
+        return cls(
+            khetma_id=khetma_row["khetma_id"],
+            number=khetma_row["number"],
+            status=cls.khetma_status[khetma_row["status"].upper()],
+            chapters=[Chapter.from_db_row(row) for row in chapters_rows]
         )
-
-        for chapter in khetma.chapters:
-            chapter_number = str(chapter.number)
-
-            if chapter_number in khetma_dict[khetma_id]["empty_chapters"]:
-                chapter.mark_empty()
-            elif chapter_number in khetma_dict[khetma_id]["reserved_chapters"]:
-                chapter.reserve(khetma_dict[khetma_id]["reserved_chapters"][chapter_number])
-            elif chapter_number in khetma_dict[khetma_id]["finished_chapters"]:
-                chapter.mark_finished()
-
-        return khetma
-
+    
     def to_dict(self) -> Dict[str, Any]:
         """
         Serializes the Khetma object into a dictionary for database storage..
