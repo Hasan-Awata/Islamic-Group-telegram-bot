@@ -48,14 +48,3 @@ class Chapter:
             status=cls.chapter_status[row["status"].upper()]
         )
     
-    def to_dict(self) -> dict[str, Any]:
-        """
-        Converts this object back to: {'1': {'owner': 12345, 'status': 'RESERVED'}}
-        """
-        return {
-            str(self.number): {
-                "owner_id": self.owner_id,
-                "owner_username": self.owner_username,
-                "status": self.status.value 
-            }
-        }

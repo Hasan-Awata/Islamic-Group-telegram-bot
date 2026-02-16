@@ -1,9 +1,10 @@
 import sqlite3
-import json
 from typing import List, Dict, Any
 
 # Local modules
 import storage_manager
+import errors
+import utilities
 from class_khetma import Khetma
 from class_chapter import Chapter
 
@@ -11,7 +12,7 @@ class KhetmaStorage:
     def __init__(self, db_core: storage_manager.StorageManager):
         self.db = db_core
         self._init_khetma_table()
-        self._init_chapters_table
+        self._init_chapters_table()
     
     def _init_khetma_table(self):
         with self.db.connect_to_db() as conn:
@@ -21,9 +22,6 @@ class KhetmaStorage:
                     chat_id INTEGER NOT NULL,
                     number INTEGER NOT NULL,
                     status TEXT CHECK(status IN ('ACTIVE', 'FINISHED')) DEFAULT 'ACTIVE',
-                    empty_chapters TEXT DEFAULT '[]', -- only a list of numbers since we have no crucial data yet.
-                    reserved_chapters TEXT DEFAULT '{}', -- a list of dictionaries that shows the owner beside number.
-                    finished_chapters TEXT DEFAULT '{}', 
 
                     FOREIGN KEY (chat_id) REFERENCES chats(chat_id) ON DELETE CASCADE
                 );
@@ -36,7 +34,7 @@ class KhetmaStorage:
                 chapter_id INTEGER PRIMARY KEY AUTOINCREMENT,
                 khetma_id INTEGER NOT NULL,
                 number INTEGER NOT NULL,
-                status TEXT DEFAULT 'AVAILABLE', -- 'EMPTY', 'RESERVED', 'FINISHED'
+                status TEXT DEFAULT 'EMPTY', -- 'EMPTY', 'RESERVED', 'FINISHED'
                 owner_id INTEGER,          -- NULL if empty
                 owner_username TEXT,           -- NULL if empty
                          
@@ -55,8 +53,8 @@ class KhetmaStorage:
         """
 
         sql_insert_chapters = """
-            INSERT INTO chapters (chat_id, khetma_id, number, status)
-            VALUES (?, ?, ?, 'EMPTY')
+            INSERT INTO chapters (khetma_id, number, status)
+            VALUES (?, ?, 'EMPTY')
         """
         khetma_num = self.calc_next_khetma_number(chat_id)
 
@@ -65,7 +63,7 @@ class KhetmaStorage:
             cursor = conn.execute(sql_insert_khetma, (chat_id, khetma_num))
             khetma_id = cursor.lastrowid
 
-            chapters_data = [(chat_id, khetma_id, chat_num) for chat_num in range(1, 31)]
+            chapters_data = [(khetma_id, chat_num) for chat_num in range(1, 31)]
 
             cursor = conn.executemany(sql_insert_chapters, chapters_data)
 
@@ -74,37 +72,6 @@ class KhetmaStorage:
 
             return Khetma(khetma_id, khetma_num, Khetma.khetma_status.ACTIVE)
         
-    def get_chat_khetmat(self, chat_id, status_str: str) -> list[Khetma]:
-        """Fetches ALL finished Khetmat for a specific chat as a list of khetma objects."""
-        sql = """
-            SELECT * FROM khetmat 
-            WHERE chat_id = ? AND status = ?
-        """
-        
-        with self.db.connect_to_db() as conn:
-            # Enable accessing columns by name
-            conn.row_factory = sqlite3.Row 
-            cursor = conn.execute(sql, (chat_id, status_str))
-            rows = cursor.fetchall() 
-
-            khetmat_list = []
-
-            for row in rows:
-                khetma_dict = {
-                    str(row["khetma_id"]): {
-                    "number": row["number"],
-                    "status": row["status"],
-                    # Decode JSON text back into Python Lists for each row
-                    "empty_chapters": json.loads(row["empty_chapters"]),
-                    "reserved_chapters": json.loads(row["reserved_chapters"]),
-                    "finished_chapters": json.loads(row["finished_chapters"])
-                    }
-                }
-                
-                khetmat_list.append(Khetma.from_db_row(khetma_dict))
-
-            return khetmat_list  # Returns a list of khetmat objetcs
-
     def get_khetma(self, khetma_id=None, khetma_number=None, chat_id=None) -> Khetma | None:
         """
         Fetches a single specific Khetma directly from the DB.
@@ -201,6 +168,77 @@ class KhetmaStorage:
             status=Chapter.chapter_status[chapter_row["status"].upper()]
         )
 
+    def update_khetma(self, khetma: Khetma):
+        
+        sql_command = """
+            UPDATE khetmat 
+            SET status = ?,
+            number = ?
+            WHERE khetma_id = ?
+        """
+
+        with self.db.connect_to_db() as conn:
+            cursor = conn.execute(sql_command, (khetma.status.value.upper(), khetma.number, khetma.khetma_id))
+            conn.commit()
+            return cursor.rowcount > 0 # True: the updating succeeded, Flase: the update failed
+        
+    def update_chapter(self, khetma_id, chapter: Chapter):
+        
+        sql_command = """
+            UPDATE chapters 
+            SET status = ?,
+            owner_id = ?,
+            owner_username = ?
+            WHERE khetma_id = ? AND number = ?
+        """
+
+        with self.db.connect_to_db() as conn:
+            cursor = conn.execute(sql_command, (
+                chapter.status.value.upper(),
+                chapter.owner_id,
+                chapter.owner_username,
+                khetma_id, chapter.number
+                ))
+            conn.commit()
+            return cursor.rowcount > 0 # True: the updating succeeded, Flase: the update failed
+
+    def reserve_chapter(self, khetma_id, chapter_number, user_id, username) -> bool:
+        chapter = self.get_chapter(khetma_id=khetma_id, chapter_number=chapter_number)
+        if chapter.is_reserved:
+            raise errors.ChapterAlreadyReservedError
+        elif chapter.is_finished: 
+            raise errors.ChapterFinishedError
+        else:
+            chapter.reserve(user_id, username)
+            self.update_chapter(khetma_id, chapter)
+            return True
+
+    def withdraw_chapter(self, khetma_id, chapter_number, user_id, is_admin=False) -> bool:
+        chapter = self.get_chapter(khetma_id=khetma_id, chapter_number=chapter_number)
+        if chapter.is_available:
+            raise errors.ChapterAlreadyEmptyError
+        elif chapter.is_finished and not is_admin: 
+            raise errors.ChapterFinishedError
+        elif chapter.is_reserved and not is_admin:
+            if user_id != chapter.owner_id:
+                raise errors.ChapterNotOwnedError
+        chapter.mark_empty()
+        self.update_chapter(khetma_id, chapter)
+        return True
+    
+    def finish_chapter(self, khetma_id, chapter_number, user_id, username) -> bool:
+        chapter = self.get_chapter(khetma_id=khetma_id, chapter_number=chapter_number)
+        if chapter.is_finished:
+            raise errors.ChapterFinishedError
+        elif chapter.is_available:
+            chapter.reserve(user_id, username)
+        elif chapter.is_reserved and user_id != chapter.owner_id:
+            raise errors.ChapterNotOwnedError
+
+        chapter.mark_finished()
+        self.update_chapter(khetma_id, chapter)
+        return True
+            
     def calc_finished_khetmat_number(self, chat_id) -> int:
         sql_command = "SELECT COUNT(*) FROM khetmat WHERE chat_id = ? and status = 'FINISHED'"
         

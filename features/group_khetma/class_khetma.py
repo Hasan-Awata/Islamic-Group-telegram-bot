@@ -85,24 +85,3 @@ class Khetma:
             chapters=[Chapter.from_db_row(row) for row in chapters_rows]
         )
     
-    def to_dict(self) -> Dict[str, Any]:
-        """
-        Serializes the Khetma object into a dictionary for database storage..
-        """
-        reserved_map = {}
-        for chapter in self.get_reserved_chapters():
-            reserved_map.update(chapter.to_dict())
-
-        finished_map = {}
-        for chapter in self.get_finished_chapters():
-            finished_map.update(chapter.to_dict())
-
-        return {
-            self.khetma_id:{
-            "number": self.number,
-            "status": self.status.value,
-            "empty_chapters": [chapter.number for chapter in self.get_available_chapters()],
-            "reserved_chapters": reserved_map,
-            "finished_chapters": finished_map,
-            }
-        }
