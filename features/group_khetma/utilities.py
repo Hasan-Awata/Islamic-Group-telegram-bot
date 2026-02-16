@@ -263,9 +263,11 @@ def create_khetma_message(khetma: Khetma) -> str:
     chapters_text = ""
 
     for chapter in khetma.chapters:
-        # Handle Empty vs Taken
-        if chapter.owner:
-            status = f"✅ {chapter.owner}"  # Or just the name
+        # Handle chapter status
+        if chapter.status.value == "FINISHED":
+            status = "✅"
+        elif chapter.status.value == "RESERVED":
+            status = f"{chapter.owner_username}"  
         else:
             status = "" 
 
@@ -275,6 +277,7 @@ def create_khetma_message(khetma: Khetma) -> str:
     # Construct the final block
     message = (
         f"**الختمة رقم -> {khetma.number}**"
+        f"**الحالة: {"مستمرة" if khetma.status.value == "ACTIVE" else "منتهية"}**"
         f"\n------------------\n"
         f"{chapters_text}"
     )

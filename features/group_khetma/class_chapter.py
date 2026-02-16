@@ -7,21 +7,24 @@ class Chapter:
         RESERVED = "RESERVED"
         FINISHED = "FINISHED"
 
-    def __init__(self, number, owner, status=chapter_status.EMPTY):
+    def __init__(self, number, owner_id, owner_username, status=chapter_status.EMPTY):
         self.number = number
-        self.owner = owner
+        self.owner_id = owner_id
+        self.owner_username = owner_username
         self.status = status
     
-    def reserve(self, owner_id):
+    def reserve(self, owner_id, owner_username):
         self.status = self.chapter_status.RESERVED
-        self.owner = owner_id
+        self.owner_id = owner_id
+        self.owner_username = owner_username
 
     def mark_finished(self):
         self.status = self.chapter_status.FINISHED
 
     def mark_empty(self):
         self.status = self.chapter_status.EMPTY
-        self.owner = None
+        self.owner_id = None
+        self.owner_username = None
 
     @property
     def is_available(self):
@@ -44,7 +47,8 @@ class Chapter:
         
         chapter_obj = Chapter(
             int(ch_num),
-            chapter_dict[ch_num]["owner"],
+            chapter_dict[ch_num]["owner_id"],
+            chapter_dict[ch_num]["owner_username"],
             cls.chapter_status[chapter_dict[ch_num]["status"].upper()]   
         )
 
@@ -56,7 +60,8 @@ class Chapter:
         """
         return {
             str(self.number): {
-                "owner": self.owner,
+                "owner_id": self.owner_id,
+                "owner_username": self.owner_username,
                 "status": self.status.value 
             }
         }

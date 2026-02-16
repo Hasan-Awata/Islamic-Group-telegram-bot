@@ -174,8 +174,8 @@ class KhetmaStorage:
             cursor = conn.execute(sql, (chat_id,))
             return cursor.fetchone()[0]
         
-    def assign_chapter_to_user(self, khetma_id, chat_id, chapter_num, user_id):
-        khetma = self.get_active_khetma(khetma_id, chat_id)
+    def assign_chapter_to_user(self, khetma_id, chat_id, chapter_num, user_id, username) -> bool:
+        khetma = self.get_khetma(khetma_id, chat_id, "ACTIVE")
 
         if khetma is None:
             return False
@@ -183,8 +183,77 @@ class KhetmaStorage:
         chapter = khetma.get_chapter(chapter_num)
 
         if chapter.is_available:
-            chapter.reserve(user_id)
+            chapter.reserve(user_id, username)
             self.update_khetma(chat_id, khetma)
             return True
         else:
             return False
+
+    def withdraw_chapter_from_user(self, khetma_id, chat_id, chapter_num) -> bool:
+        khetma = self.get_khetma(khetma_id, chat_id, "ACTIVE")
+
+        if khetma is None:
+            return False
+
+        chapter = khetma.get_chapter(chapter_num)
+
+        if chapter.is_available:
+            return False
+        elif chapter.is_finished:
+            return False
+        else:
+            chapter.mark_empty()
+            self.update_khetma(chat_id, khetma)
+            return True
+    
+    def mark_chapter_finished(self, khetma_id, chat_id, chapter_num, user_id=None, username=None) -> bool:
+        khetma = self.get_khetma(khetma_id, chat_id, "ACTIVE")
+
+        if khetma is None:
+            return False
+        
+        if user_id != khetma.get_chapter(chapter_num).owner_id:
+            return False
+        
+        if khetma.get_chapter(chapter_num).is_finished:
+            return False
+        
+        if khetma.mark_chapter_finished(chapter_num, user_id, username):
+            self.update_khetma(chat_id, khetma)
+            return True
+        
+        return False
+    
+    def mark_all_user_chapters_finished(self, chat_id, user_id) -> list[int]:
+        khetmat = self.get_chat_khetmat(chat_id, "ACTIVE")
+        marked_chapters = []
+
+        for khetma in khetmat:
+            is_modified = False
+            for chapter in khetma.chapters:
+                if user_id == chapter.owner_id and not chapter.is_finished:
+                    khetma.mark_chapter_finished(chapter.number, user_id)
+                    marked_chapters.append(chapter.number)
+                    is_modified = True
+                else:
+                    return False
+            if is_modified:
+                self.update_khetma(chat_id, khetma)
+
+        return marked_chapters
+
+    def withdraw_all_user_chapters(self, chat_id, user_id) -> list[int]:
+        khetmat = self.get_chat_khetmat(chat_id, "ACTIVE")
+        withdrawed_chapters = []
+
+        for khetma in khetmat:
+            is_modified = False
+            for chapter in khetma.chapters:
+                if user_id == chapter.owner_id:
+                    khetma.mark_chapter_empty(chapter.number)
+                    withdrawed_chapters.append(chapter.number)
+                    is_modified = True
+            if is_modified:
+                self.update_khetma(chat_id, khetma)
+
+        return withdrawed_chapters

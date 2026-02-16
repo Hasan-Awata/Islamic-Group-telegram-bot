@@ -44,38 +44,29 @@ class Khetma:
 
         return available_chapters
     
-    def reserve_chapter(self, user_id, chapter_num) -> bool:
-        available_chapters = self.get_available_chapters() 
-
-        if available_chapters == []:
+    def reserve_chapter(self, user_id, username, chapter_num) -> bool:
+        chapter = self.get_chapter(chapter_num)
+        if not chapter.is_available:
             return False
-        else:
-            for chapter in available_chapters:
-                if chapter.number == chapter_num:
-                    chapter.reserve(user_id)
-                    return True
+        chapter.reserve(user_id, username)
     
-    def mark_chapter_finished(self, chapter_num) -> bool:
-        reserved_chapters = self.get_reserved_chapters() 
-
-        if reserved_chapters == []:
+    def mark_chapter_finished(self, chapter_num, user_id=None, username=None) -> bool:
+        chapter = self.get_chapter(chapter_num)
+        if chapter.is_finished:
             return False
-        else:
-            for chapter in reserved_chapters:
-                if chapter.number == chapter_num:
-                    chapter.mark_finished()
-                    return True
+        
+        if chapter.is_available:
+            chapter.owner_id = user_id
+            chapter.owner_username = username
+
+        chapter.mark_finished()
+        return True
 
     def mark_chapter_empty(self, chapter_num) -> bool:
-        non_empty_chapters = self.get_reserved_chapters() + self.get_finished_chapters()
-
-        if non_empty_chapters == []:
+        chapter = self.get_chapter(chapter_num)
+        if chapter.is_available:
             return False
-        else:
-            for chapter in non_empty_chapters:
-                if chapter.number == chapter_num:
-                    chapter.mark_empty()
-                    return True
+        chapter.mark_empty()
 
     @classmethod
     def from_dict(cls, khetma_dict: Dict[str, Any]) -> Khetma:
@@ -106,15 +97,15 @@ class Khetma:
 
     def to_dict(self) -> Dict[str, Any]:
         """
-        Pure Factory Method: Converts a raw dictionary into Khetma Object.
+        Serializes the Khetma object into a dictionary for database storage..
         """
         reserved_map = {}
         for chapter in self.get_reserved_chapters():
-            reserved_map[str(chapter.number)] = chapter.owner
+            reserved_map.update(chapter.to_dict())
 
         finished_map = {}
         for chapter in self.get_finished_chapters():
-            finished_map[str(chapter.number)] = chapter.owner
+            finished_map.update(chapter.to_dict())
 
         return {
             self.khetma_id:{
