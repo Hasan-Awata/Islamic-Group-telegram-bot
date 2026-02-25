@@ -21,7 +21,7 @@ def main(argv=None):
     # ==================================================================
     bot_app.bot_data["khetma_storage"] = khetma_storage_engine
     
-    command_handlers()
+    main_commands_handler()
         
     # # When user types /help -> run help_command()
     # bot_app.add_handler(CommandHandler("help", help_command))
