@@ -16,7 +16,7 @@ class Khetma:
         if chapters:
             self.chapters = chapters
         else:
-            self.chapters = [Chapter(chapter_num, None, Chapter.chapter_status.EMPTY) for chapter_num in range(1, 31)] 
+            self.chapters = [Chapter(khetma_id, chapter_num, None, Chapter.chapter_status.EMPTY) for chapter_num in range(1, 31)] 
 
     @property
     def is_finished(self):

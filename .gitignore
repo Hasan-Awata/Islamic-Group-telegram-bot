@@ -4,3 +4,4 @@ __pycache__/
 *.db
 /gather_project.py
 /project_context_code.txt
+/.vscode

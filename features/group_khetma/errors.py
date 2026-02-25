@@ -46,6 +46,11 @@ class KhetmaNotSpecifiedError(KhetmaError):
     def __init__(self, message="⚠️ الرجاء الرد على رسالة الختمة المقصودة"):
         super().__init__(message)
 
+class NoOwnedChapters(KhetmaError):
+    """Raised when trying to finish/withdraw/cancel a chapter wihtout owning any chapters."""
+    def __init__(self, message="لا يوجد أي أجزاء محجوزة باسمك ⛔"):
+        super().__init__(message)
+
 # ==========================================
 # 3. CONTEXT & STATE (Old Messages)
 # ==========================================

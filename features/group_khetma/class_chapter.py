@@ -7,7 +7,8 @@ class Chapter:
         RESERVED = "RESERVED"
         FINISHED = "FINISHED"
 
-    def __init__(self, number, owner_id, owner_username, status=chapter_status.EMPTY):
+    def __init__(self, khetma_id, number, owner_id, owner_username, status=chapter_status.EMPTY):
+        self.parent_khetma = khetma_id
         self.number = number
         self.owner_id = owner_id
         self.owner_username = owner_username
@@ -42,6 +43,7 @@ class Chapter:
     def from_db_row(cls, row) -> 'Chapter':
         """Factory: Converts a DB row (sqlite3.Row) into a Chapter object."""
         return cls(
+            parent_khetma=row["khetma_id"],
             number=row["number"],
             owner_id=row["owner_id"],
             owner_username=row["owner_username"], 
