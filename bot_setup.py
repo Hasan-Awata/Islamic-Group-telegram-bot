@@ -1,5 +1,4 @@
 from decouple import config
-import google.generativeai as genai
 from telegram.ext import ApplicationBuilder
 
 # --- Load environment variables ---
