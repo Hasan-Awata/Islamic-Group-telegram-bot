@@ -43,7 +43,6 @@ This project was built with professional backend engineering principles in mind:
 2. Install the required dependencies:
     ```bash
     pip install -r requirements.txt
-    Create a .env file in the root directory and add your Telegram Bot Token:
     ```
 3. Create a .env file in the root directory and add your Telegram Bot Token:
     ```bash
