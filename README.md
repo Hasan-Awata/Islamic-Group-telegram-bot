@@ -47,7 +47,6 @@ This project was built with professional backend engineering principles in mind:
 3. Create a .env file in the root directory and add your Telegram Bot Token:
     ```bash
     BOT_TOKEN=your_telegram_api_token_here
-    Run the bot:
     ```
 4. Run the code
     ```bash
