@@ -2,8 +2,7 @@ from telegram import InlineKeyboardButton, InlineKeyboardMarkup, Update
 from telegram.ext import ContextTypes
 
 # Local modules
-from class_khetma import Khetma
-from class_chapter import Chapter
+from features.group_khetma.class_khetma import Khetma
 
 def render_khetma_keyboard(khetma: Khetma):
     """

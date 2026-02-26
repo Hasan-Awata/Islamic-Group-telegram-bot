@@ -1,6 +1,5 @@
 # Local Imports
-from class_khetma import Khetma
-import utilities
+import features.group_khetma.utilities as utilities
 
 
 MESSAGE_BUILDERS = {

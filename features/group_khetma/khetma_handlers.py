@@ -3,11 +3,11 @@ from telegram.ext import ContextTypes
 import asyncio
 
 # Local modules
-import utilities
-from inline_keyboards import render_khetma_keyboard
-import responses
-import errors
-from khetma_storage import KhetmaStorage
+import features.group_khetma.utilities as utilities
+import features.group_khetma.inline_keyboards as inline_keyboards
+import features.group_khetma.responses as responses
+import features.group_khetma.errors as errors
+from features.group_khetma.khetma_storage import KhetmaStorage
 
 async def start_khetma_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
     chat_id = update.effective_chat.id
@@ -32,7 +32,7 @@ async def start_khetma_command(update: Update, context: ContextTypes.DEFAULT_TYP
     khetma_message = await context.bot.send_message(
         chat_id=chat_id,
         text=responses.MESSAGE_BUILDERS["new_khetma"](khetma),
-        reply_markup= render_khetma_keyboard(khetma),
+        reply_markup= inline_keyboards.render_khetma_keyboard(khetma),
         parse_mode='Markdown'
         )
 
@@ -109,7 +109,7 @@ async def finish_message_handler(update: Update, context: ContextTypes.DEFAULT_T
                 updated_khetma = storage.get_khetma(khetma_id=khetma_obj.khetma_id)
                 
                 # 2. Render the new keyboard using your existing function
-                new_keyboard = render_khetma_keyboard(updated_khetma)
+                new_keyboard = inline_keyboards.render_khetma_keyboard(updated_khetma)
                 
                 # 3. Edit the original message to show the new checkmarks
                 await user_message.reply_to_message.edit_reply_markup(reply_markup=new_keyboard)
@@ -161,7 +161,7 @@ async def handle_button_reserve(update: Update, context: ContextTypes.DEFAULT_TY
             return
         try:
             updated_khetma = storage.get_khetma(khetma_id)
-            new_keyboard = render_khetma_keyboard(updated_khetma)
+            new_keyboard = inline_keyboards.render_khetma_keyboard(updated_khetma)
             await query.edit_message_text(text=utilities.create_khetma_message(updated_khetma),reply_markup=new_keyboard)
             await query.answer() 
         except Exception:

@@ -3,9 +3,9 @@ from typing import List, Dict, Any
 
 # Local modules
 import storage_manager
-import errors
-from class_khetma import Khetma
-from class_chapter import Chapter
+import features.group_khetma.errors as errors
+from features.group_khetma.class_khetma import Khetma
+from features.group_khetma.class_chapter import Chapter
 
 class KhetmaStorage:
     def __init__(self, db_core: storage_manager.StorageManager):
@@ -14,7 +14,7 @@ class KhetmaStorage:
         self._init_chapters_table()
     
     def _init_khetma_table(self):
-        with self.db.connect_to_db() as conn:
+        with self.db.managed_connection() as conn:
             conn.execute('''
                 CREATE TABLE IF NOT EXISTS khetmat(
                     khetma_id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -27,7 +27,7 @@ class KhetmaStorage:
             ''')
 
     def _init_chapters_table(self):
-        with self.db.connect_to_db() as conn:
+        with self.db.managed_connection() as conn:
             conn.execute('''
                 CREATE TABLE IF NOT EXISTS chapters (
                 chapter_id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -57,7 +57,7 @@ class KhetmaStorage:
         """
         khetma_num = self.calc_next_khetma_number(chat_id)
 
-        with self.db.connect_to_db() as conn:
+        with self.db.managed_connection() as conn:
             cursor = conn.execute(sql_insert_chat, (chat_id,))
             cursor = conn.execute(sql_insert_khetma, (chat_id, khetma_num))
             khetma_id = cursor.lastrowid
@@ -65,9 +65,6 @@ class KhetmaStorage:
             chapters_data = [(khetma_id, chat_num) for chat_num in range(1, 31)]
 
             cursor = conn.executemany(sql_insert_chapters, chapters_data)
-
-
-            conn.commit()
 
             return Khetma(khetma_id, khetma_num, Khetma.khetma_status.ACTIVE)
         
@@ -96,7 +93,7 @@ class KhetmaStorage:
 
         sql_chapters_command = "SELECT * FROM chapters WHERE khetma_id = ? ORDER BY number ASC"
 
-        with self.db.connect_to_db() as conn:
+        with self.db.managed_connection() as conn:
             conn.row_factory = sqlite3.Row  # Access columns by name
             
             # A. Fetch Khetma
@@ -150,7 +147,7 @@ class KhetmaStorage:
         else:
             return None 
 
-        with self.db.connect_to_db() as conn:
+        with self.db.managed_connection() as conn:
             conn.row_factory = sqlite3.Row  # Access columns by name
             
             chapter_cursor = conn.execute(sql_chapter_command, params)
@@ -176,7 +173,7 @@ class KhetmaStorage:
             sql_command += " AND khetma_id= ?"
             params.append(khetma_id)
 
-        with self.db.connect_to_db() as conn:
+        with self.db.managed_connection() as conn:
             conn.row_factory = sqlite3.Row  # Access columns by name
             
             cursor = conn.execute(sql_command, params)
@@ -201,9 +198,8 @@ class KhetmaStorage:
             WHERE khetma_id = ?
         """
 
-        with self.db.connect_to_db() as conn:
+        with self.db.managed_connection() as conn:
             cursor = conn.execute(sql_command, (khetma.status.value.upper(), khetma.number, khetma.khetma_id))
-            conn.commit()
             return cursor.rowcount > 0 # True: the updating succeeded, Flase: the update failed
         
     def update_chapters(self, chapters: list[Chapter] | Chapter) -> bool:
@@ -223,7 +219,7 @@ class KhetmaStorage:
             WHERE khetma_id = ? AND number = ?
         """
         
-        with self.db.connect_to_db() as conn:
+        with self.db.managed_connection() as conn:
             data_to_update = [
                 (chapter.status.value.upper(), chapter.owner_id, chapter.owner_username, chapter.parent_khetma, chapter.number)
                 for chapter in chapters
@@ -231,7 +227,6 @@ class KhetmaStorage:
             
             # This works perfectly whether the list has 1 item or 30 items
             cursor = conn.executemany(sql_command, data_to_update)
-            conn.commit()
             
             return cursor.rowcount > 0
 
@@ -243,7 +238,7 @@ class KhetmaStorage:
             raise errors.ChapterFinishedError()
         else:
             chapter.reserve(user_id, username)
-            self.update_chapters(khetma_id, chapter)
+            self.update_chapters(chapter)
             return True
 
     def withdraw_chapter(self, khetma_id, chapter_number, user_id, is_admin=False) -> bool:
@@ -256,7 +251,7 @@ class KhetmaStorage:
             if user_id != chapter.owner_id:
                 raise errors.ChapterNotOwnedError()
         chapter.mark_empty()
-        self.update_chapters(khetma_id, chapter)
+        self.update_chapters(chapter)
         return True
     
     def finish_chapter(self, khetma_id, chapter_number, user_id, username) -> bool:
@@ -271,7 +266,7 @@ class KhetmaStorage:
 
         chapter.mark_finished()
 
-        if not self.update_chapters(khetma_id, chapter):
+        if not self.update_chapters(chapter):
             raise errors.DatabaseConnectionError()
             
         return True
@@ -299,7 +294,7 @@ class KhetmaStorage:
             success.append(chapter)
         
         if success:
-            if not self.update_chapters(khetma_id, success):
+            if not self.update_chapters(success):
                 raise errors.DatabaseConnectionError()
         
         return success, failed 
@@ -307,7 +302,7 @@ class KhetmaStorage:
     def calc_finished_khetmat_number(self, chat_id) -> int:
         sql_command = "SELECT COUNT(*) FROM khetmat WHERE chat_id = ? and status = 'FINISHED'"
         
-        with self.db.connect_to_db() as conn:
+        with self.db.managed_connection() as conn:
             cursor = conn.execute(sql_command, (chat_id,))
             count = cursor.fetchone()[0]
             return count + 1
@@ -323,7 +318,7 @@ class KhetmaStorage:
         # 2. Max is 5 -> Returns 5 -> Result: 6
         sql = "SELECT COALESCE(MAX(number), 0) + 1 FROM khetmat WHERE chat_id = ?"
         
-        with self.db.connect_to_db() as conn:
+        with self.db.managed_connection() as conn:
             cursor = conn.execute(sql, (chat_id,))
             return cursor.fetchone()[0]
         

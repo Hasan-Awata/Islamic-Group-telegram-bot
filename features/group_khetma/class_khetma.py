@@ -2,7 +2,7 @@ from enum import Enum
 from typing import List, Dict, Any
 
 # project modules
-from class_chapter import Chapter 
+from features.group_khetma.class_chapter import Chapter 
 
 class Khetma:
     class khetma_status(Enum):

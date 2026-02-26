@@ -2,6 +2,7 @@ __pycache__/
 /.venv/
 .env
 *.db
+*.sqlite
 /gather_project.py
 /project_context_code.txt
 /.vscode

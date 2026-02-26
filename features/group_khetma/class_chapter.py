@@ -7,8 +7,8 @@ class Chapter:
         RESERVED = "RESERVED"
         FINISHED = "FINISHED"
 
-    def __init__(self, khetma_id, number, owner_id, owner_username, status=chapter_status.EMPTY):
-        self.parent_khetma = khetma_id
+    def __init__(self, parent_khetma, number, owner_id, owner_username, status=chapter_status.EMPTY):
+        self.parent_khetma = parent_khetma
         self.number = number
         self.owner_id = owner_id
         self.owner_username = owner_username

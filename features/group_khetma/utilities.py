@@ -3,7 +3,7 @@ from telegram.constants import ChatMemberStatus
 from telegram.ext import ContextTypes
 
 # Local imports
-from class_khetma import Khetma
+from features.group_khetma.class_khetma import Khetma
 
 async def is_user_admin(chat_id: int, user_id: int, context: ContextTypes.DEFAULT_TYPE) -> bool:
     """
