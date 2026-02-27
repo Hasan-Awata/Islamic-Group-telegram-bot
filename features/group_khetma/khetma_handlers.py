@@ -1,4 +1,5 @@
-from telegram import InlineKeyboardButton, InlineKeyboardMarkup, Update, ChatMember, Message
+from telegram import  Update
+from telegram import  error as TelegramError
 from telegram.ext import ContextTypes
 import asyncio
 
@@ -8,6 +9,7 @@ import features.group_khetma.inline_keyboards as inline_keyboards
 import features.group_khetma.responses as responses
 import features.group_khetma.errors as errors
 from features.group_khetma.khetma_storage import KhetmaStorage
+
 
 async def start_khetma_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
     chat_id = update.effective_chat.id
@@ -21,9 +23,8 @@ async def start_khetma_command(update: Update, context: ContextTypes.DEFAULT_TYP
         await asyncio.sleep(5)
         try:
             await err_msg.delete()
-        except Exception:
-            pass
-        return
+        except TelegramError.BadRequest as err:
+            return
         
     storage : KhetmaStorage = context.bot_data["khetma_storage"]
 
@@ -38,8 +39,12 @@ async def start_khetma_command(update: Update, context: ContextTypes.DEFAULT_TYP
 
     try:
         await context.bot.pin_chat_message(chat_id=chat_id, message_id=khetma_message.message_id)
+    except TelegramError.BadRequest as err:
+        pass
+
+    try:
         await context.bot.delete_message(chat_id=chat_id, message_id=command_message.message_id)
-    except Exception:
+    except TelegramError.BadRequest as err:
         pass
 
 async def finish_message_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
@@ -98,16 +103,12 @@ async def finish_message_handler(update: Update, context: ContextTypes.DEFAULT_T
             # UI REFRESH: Update the inline keyboard grid
             # ==========================================
             try:
-                # 1. Fetch the fresh Khetma state from the database
                 updated_khetma = storage.get_khetma(khetma_id=khetma_obj.khetma_id)
                 
-                # 2. Render the new keyboard using your existing function
                 new_keyboard = inline_keyboards.render_khetma_keyboard(updated_khetma)
                 
-                # 3. Edit the original message to show the new checkmarks
                 await user_message.reply_to_message.edit_reply_markup(reply_markup=new_keyboard)
-            except Exception as e:
-                # If Telegram complains (e.g., the keyboard didn't actually change), ignore it
+            except TelegramError.BadRequest as e:
                 pass
         else:
             if any(word in user_message.text.split() for word in ["أجزائي", "اجزائي"]):
@@ -150,7 +151,7 @@ async def handle_button_reserve(update: Update, context: ContextTypes.DEFAULT_TY
             new_keyboard = inline_keyboards.render_khetma_keyboard(updated_khetma)
             await query.edit_message_text(text=utilities.create_khetma_message(updated_khetma),reply_markup=new_keyboard)
             await query.answer() 
-        except Exception:
+        except TelegramError.BadRequest:
             pass
 
 
