@@ -68,19 +68,12 @@ async def finish_message_handler(update: Update, context: ContextTypes.DEFAULT_T
 
             if any(word in user_message.text.split() for word in ["أجزائي", "اجزائي"]):
                 try:
-                    successful, failed =  storage.finish_all_user_chapters(user.id, username, khetma_obj.khetma_id)
+                    finished_chapters =  storage.finish_all_user_chapters(user.id, username, khetma_obj.khetma_id)
                     
-                    for chapter in successful:
+                    for chapter in finished_chapters:
                         reply_text += responses.TEXT_TEMPLATES["finish_chapter_body"].format(
                         chapter_num = chapter.number,
                         khetma_num = khetma_obj.number
-                    ) + "\n"
-
-                    for chapter, error in failed:
-                        reply_text += responses.TEXT_TEMPLATES["finish_chapter_error"].format(
-                        chapter_num = chapter.number,
-                        khetma_num = khetma_obj.number,
-                        error_message = error.message
                     ) + "\n"
 
                     reply_text += responses.TEXT_TEMPLATES["finish_chapter_footer"] if reply_text != "" else "ليس لديك أي أجزاء"
@@ -119,19 +112,12 @@ async def finish_message_handler(update: Update, context: ContextTypes.DEFAULT_T
         else:
             if any(word in user_message.text.split() for word in ["أجزائي", "اجزائي"]):
                 try:
-                    successful, failed =  storage.finish_all_user_chapters(user.id, username)
+                    finished_chapters =  storage.finish_all_user_chapters(user.id, username)
                     
-                    for chapter in successful:
+                    for chapter in finished_chapters:
                         reply_text += responses.TEXT_TEMPLATES["finish_chapter_body"].format(
                         chapter_num = chapter.number,
-                        khetma_num = storage.get_khetma(chapter.parent_khetma).number
-                    ) + "\n"
-
-                    for chapter, error in failed:
-                        reply_text += responses.TEXT_TEMPLATES["finish_chapter_error"].format(
-                        chapter_num = chapter.number,
-                        khetma_num = storage.get_khetma(chapter.parent_khetma).number,
-                        error_message = error.message
+                        khetma_num = storage.get_khetma(khetma_id=chapter.parent_khetma).number
                     ) + "\n"
 
                     reply_text += responses.TEXT_TEMPLATES["finish_chapter_footer"] if reply_text != "" else "ليس لديك أي أجزاء"

@@ -13,7 +13,8 @@ This is a deeply valued act of worship in the Islamic faith. This solution was c
 
 ### 1. Khetma (Group Reading Session)
 * **Real-Time State Management:** Users can reserve, free up, or finish parts with instant visual feedback via dynamically updating inline keyboards.
-* **Natural Language Processing:** Users can simply type natural Arabic phrases like `"تم 1 و 2"` or `"تم أجزائي"`. The bot parses the numbers, validates database ownership, and updates the UI automatically.
+* **Arabic Pattern Matching:** Users can simply type natural Arabic phrases like `"تم 1 و 2"` or `"تم أجزائي"`. The bot parses the numbers, validates database ownership, and updates the UI automatically.
+* **Arabic Numerals-from-text Extraction:** The bot can extract all the numbers written in a user's text no matter what is the way they wrote the numbers in (`"21"`, `"الحادي والعشرون"`, `"٢١"`). 
 * **Role-Based Access Control (RBAC):** Only authorized group admins can create or delete a Khetma, preventing spam and accidental deletions.
 * **Concurrency Safety:** Prevents race conditions (e.g., two users trying to reserve the exact same part at the exact same millisecond) using strict database-level constraints and custom Python domain errors.
 

@@ -7,6 +7,8 @@ from features.group_khetma.khetma_storage import KhetmaStorage
 from features.group_khetma import errors
 from features.group_khetma import utilities
 
+# python -m unittest -v testings.khetma_feature_testing
+
 TEST_DB_NAME = "test_bot_database.sqlite"
 
 class TestGroupKhetma(unittest.TestCase):
@@ -91,11 +93,14 @@ class TestGroupKhetma(unittest.TestCase):
         self.storage.reserve_chapter(khetma.khetma_id, 2, self.user_a["id"], self.user_a["username"])
         
         # Execute "تم أجزائي" logic
-        successful, failed = self.storage.finish_all_user_chapters(self.user_a["id"], self.user_a["username"])
+        finished = self.storage.finish_all_user_chapters(self.user_a["id"], self.user_a["username"])
         
-        self.assertEqual(len(successful), 2)
-        self.assertEqual(len(failed), 0)
+        self.assertEqual(len(finished), 2)
         
+        # Execute "تم أجزائي" logic again without any owned chapters
+        with self.assertRaises(errors.NoOwnedChapters):
+            self.storage.finish_all_user_chapters(self.user_a["id"], self.user_a["username"])
+
         # Verify in DB
         ch1 = self.storage.get_chapter(khetma_id=khetma.khetma_id, chapter_number=1)
         ch2 = self.storage.get_chapter(khetma_id=khetma.khetma_id, chapter_number=2)

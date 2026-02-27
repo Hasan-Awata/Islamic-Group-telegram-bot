@@ -231,17 +231,39 @@ class KhetmaStorage:
             return cursor.rowcount > 0
 
     def reserve_chapter(self, khetma_id, chapter_number, user_id, username) -> bool:
+        sql_command = """
+            UPDATE chapters
+            SET status = 'RESERVED', owner_id = ?, owner_username = ?
+            WHERE khetma_id = ? AND number = ? AND status = 'EMPTY'
+        """
+        with self.db.managed_connection() as conn:
+            cursor = conn.execute(sql_command, (user_id, username, khetma_id, chapter_number))
+            if cursor.rowcount > 0:
+                return True
+            
         chapter = self.get_chapter(khetma_id=khetma_id, chapter_number=chapter_number)
         if chapter.is_reserved:
             raise errors.ChapterAlreadyReservedError()
         elif chapter.is_finished: 
             raise errors.ChapterFinishedError()
-        else:
-            chapter.reserve(user_id, username)
-            self.update_chapters(chapter)
-            return True
 
     def withdraw_chapter(self, khetma_id, chapter_number, user_id, is_admin=False) -> bool:
+        sql_command = """
+            UPDATE chapters
+            SET status = 'EMPTY', owner_id = NULL, owner_username = NULL
+            WHERE khetma_id = ? AND number = ? AND status = 'RESERVED'
+        """
+        params = [khetma_id, chapter_number] 
+
+        if not is_admin:
+            sql_command += " AND owner_id = ?"
+            params.append(user_id) 
+
+        with self.db.managed_connection() as conn:
+            cursor = conn.execute(sql_command, params)
+            if cursor.rowcount > 0:
+                return True
+            
         chapter = self.get_chapter(khetma_id=khetma_id, chapter_number=chapter_number)
         if chapter.is_available:
             raise errors.ChapterAlreadyEmptyError()
@@ -250,55 +272,49 @@ class KhetmaStorage:
         elif chapter.is_reserved and not is_admin:
             if user_id != chapter.owner_id:
                 raise errors.ChapterNotOwnedError()
-        chapter.mark_empty()
-        self.update_chapters(chapter)
-        return True
     
     def finish_chapter(self, khetma_id, chapter_number, user_id, username) -> bool:
+        sql_command = """
+            UPDATE chapters
+            SET status = 'FINISHED', owner_id = ?, owner_username = ?
+            WHERE khetma_id = ? AND number = ? 
+            AND (status = 'EMPTY' OR (status = 'RESERVED' AND owner_id = ?))
+        """
+        with self.db.managed_connection() as conn:
+            cursor = conn.execute(sql_command, (user_id, username, khetma_id, chapter_number, user_id))
+            if cursor.rowcount > 0:
+                return True
+
         chapter = self.get_chapter(khetma_id=khetma_id, chapter_number=chapter_number)
 
         if chapter.is_finished:
             raise errors.ChapterFinishedError()
         elif chapter.is_reserved and user_id != chapter.owner_id:
             raise errors.ChapterNotOwnedError()
-        elif chapter.is_available:
-            chapter.reserve(user_id, username)
-
-        chapter.mark_finished()
-
-        if not self.update_chapters(chapter):
-            raise errors.DatabaseConnectionError()
-            
-        return True
     
-    def finish_all_user_chapters(self, user_id, username, khetma_id=None) -> tuple[list[Chapter], list[Chapter]]:
-        try:
-            chapters = self.get_chapters_by_user(user_id, khetma_id)
-        except errors.NoOwnedChapters:
-            raise errors.NoOwnedChapters()
-            
-        success = [] # A list of chapters that were finished successfully
-        failed = [] # A list of tuples contains the chapter that failed to finish with its error message
+    def finish_all_user_chapters(self, user_id, username, khetma_id=None) -> list[Chapter]:
+        sql_command = """
+            UPDATE chapters
+            SET status = 'FINISHED'
+            WHERE owner_id = ? AND status = 'RESERVED'
+        """
+        params = [user_id] 
 
-        for chapter in chapters:
-            if chapter.is_finished:
-                failed.append((chapter, errors.ChapterFinishedError()))
-                continue 
-            elif chapter.is_reserved and user_id != chapter.owner_id:
-                failed.append((chapter, errors.ChapterNotOwnedError()))
-                continue 
-            elif chapter.is_available:
-                chapter.reserve(user_id, username)
+        if khetma_id:
+            sql_command += " AND khetma_id = ?"
+            params.append(khetma_id)
 
-            chapter.mark_finished()
-            success.append(chapter)
+        sql_command += " RETURNING *"
+
+        with self.db.managed_connection() as conn:
+            conn.row_factory = sqlite3.Row
+            cursor = conn.execute(sql_command, params)
+            rows = cursor.fetchall()
+            if not rows:
+                raise errors.NoOwnedChapters()
+
+            return [Chapter.from_db_row(row) for row in rows]
         
-        if success:
-            if not self.update_chapters(success):
-                raise errors.DatabaseConnectionError()
-        
-        return success, failed 
-
     def calc_finished_khetmat_number(self, chat_id) -> int:
         sql_command = "SELECT COUNT(*) FROM khetmat WHERE chat_id = ? and status = 'FINISHED'"
         
