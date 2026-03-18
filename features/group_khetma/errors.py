@@ -56,7 +56,7 @@ class NoOwnedChapters(KhetmaError):
 # ==========================================
 class KhetmaNotFoundError(KhetmaError):
     """Raised when the Khetma ID in the button doesn't exist in DB (Old message)."""
-    def __init__(self, message="❌ هذه الختمة لم تعد موجودة أو تم أرشفتها."):
+    def __init__(self, message="❌ هذه الختمة لم تعد موجودة."):
         super().__init__(message)
 
 class KhetmaCompletedError(KhetmaError):
@@ -86,7 +86,7 @@ class RateLimitError(KhetmaError):
 # 5. SYSTEM FAILURES (Backend)
 # ==========================================
 class DatabaseConnectionError(KhetmaError):
-    """Raised when SQLite fails or locks up."""
+    """Raised when PostgreSQL fails or locks up."""
     def __init__(self, message="⚠️ خطأ في قاعدة البيانات، حاول مرة أخرى لاحقاً."):
         super().__init__(message)
 

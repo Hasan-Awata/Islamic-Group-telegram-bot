@@ -260,26 +260,12 @@ def number_to_ordinal_arabic(n: int) -> str:
 
 
 def create_khetma_message(khetma: Khetma) -> str:
-    chapters_text = ""
-
-    for chapter in khetma.chapters:
-        # Handle chapter status
-        if chapter.status.value == "FINISHED":
-            status = "✅"
-        elif chapter.status.value == "RESERVED":
-            status = f"{chapter.owner_username}"  
-        else:
-            status = "" 
-
-        # Build the line
-        chapters_text += f"الجزء {number_to_ordinal_arabic(chapter.number)} : {status}\n"
-
     # Construct the final block
     message = (
-        f"**الختمة رقم -> {khetma.number}**"
-        f"**الحالة: {"مستمرة" if khetma.status.value == "ACTIVE" else "منتهية"}**"
-        f"\n------------------\n"
-        f"{chapters_text}"
+        f"**الختمة رقم -> {khetma.number} | {"مستمرة" if khetma.status.value == "ACTIVE" else "منتهية"}**\n"
+        f"الأجزاء المتاحة: {len(khetma.get_available_chapters())}\n"
+        f"الأجزاء المحجوزة ⬜: {len(khetma.get_reserved_chapters())}\n"
+        f"الأجزاء المنتهية ✅: {len(khetma.get_finished_chapters())}\n"
     )
     
     return message  

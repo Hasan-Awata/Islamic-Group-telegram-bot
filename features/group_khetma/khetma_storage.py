@@ -1,6 +1,3 @@
-import sqlite3
-from typing import List, Dict, Any
-
 # Local modules
 import storage_manager
 import features.group_khetma.errors as errors
@@ -14,57 +11,48 @@ class KhetmaStorage:
         self._init_chapters_table()
     
     def _init_khetma_table(self):
-        with self.db.managed_connection() as conn:
-            conn.execute('''
+        with self.db.managed_connection() as cursor:
+            cursor.execute('''
                 CREATE TABLE IF NOT EXISTS khetmat(
-                    khetma_id INTEGER PRIMARY KEY AUTOINCREMENT,
-                    chat_id INTEGER NOT NULL,
+                    khetma_id INTEGER PRIMARY KEY GENERATED ALWAYS AS IDENTITY,
+                    chat_id BIGINT NOT NULL REFERENCES chats(chat_id) ON DELETE CASCADE,
                     number INTEGER NOT NULL,
-                    status TEXT CHECK(status IN ('ACTIVE', 'FINISHED')) DEFAULT 'ACTIVE',
-
-                    FOREIGN KEY (chat_id) REFERENCES chats(chat_id) ON DELETE CASCADE
+                    status TEXT CHECK(status IN ('ACTIVE', 'FINISHED')) DEFAULT 'ACTIVE'
                 );
             ''')
 
     def _init_chapters_table(self):
-        with self.db.managed_connection() as conn:
-            conn.execute('''
+        with self.db.managed_connection() as cursor:
+            cursor.execute('''
                 CREATE TABLE IF NOT EXISTS chapters (
-                chapter_id INTEGER PRIMARY KEY AUTOINCREMENT,
-                khetma_id INTEGER NOT NULL,
+                chapter_id INTEGER PRIMARY KEY GENERATED ALWAYS AS IDENTITY,
+                khetma_id INTEGER NOT NULL REFERENCES khetmat(khetma_id) ON DELETE CASCADE,
                 number INTEGER NOT NULL,
-                status TEXT DEFAULT 'EMPTY', -- 'EMPTY', 'RESERVED', 'FINISHED'
-                owner_id INTEGER,          -- NULL if empty
-                owner_username TEXT,           -- NULL if empty
-                         
-                FOREIGN KEY(khetma_id) REFERENCES khetmat(khetma_id) ON DELETE CASCADE
+                status TEXT DEFAULT 'EMPTY', 
+                owner_id BIGINT,          
+                owner_username TEXT                                    
                 );
             ''')
 
     def create_new_khetma(self, chat_id) -> Khetma:
         # 1. Ensure the Parent exists (The "Safety Net")
-        sql_insert_chat = "INSERT OR IGNORE INTO chats (chat_id) VALUES (?)"
+        sql_insert_chat = "INSERT INTO chats (chat_id) VALUES (%s) ON CONFLICT DO NOTHING"
         
         # 2. Insert the Child (The actual Khetma)
-        sql_insert_khetma = """
-            INSERT INTO khetmat (chat_id, number, status)
-            VALUES (?, ?, 'ACTIVE')
-        """
+        sql_insert_khetma = "INSERT INTO khetmat (chat_id, number, status) VALUES (%s, %s, 'ACTIVE') RETURNING khetma_id"
 
-        sql_insert_chapters = """
-            INSERT INTO chapters (khetma_id, number, status)
-            VALUES (?, ?, 'EMPTY')
-        """
+        sql_insert_chapters = "INSERT INTO chapters (khetma_id, number, status) VALUES (%s, %s, 'EMPTY')"
+
         khetma_num = self.calc_next_khetma_number(chat_id)
 
-        with self.db.managed_connection() as conn:
-            cursor = conn.execute(sql_insert_chat, (chat_id,))
-            cursor = conn.execute(sql_insert_khetma, (chat_id, khetma_num))
-            khetma_id = cursor.lastrowid
+        with self.db.managed_connection() as cursor:
+            cursor.execute(sql_insert_chat, (chat_id,))
+            cursor.execute(sql_insert_khetma, (chat_id, khetma_num))
+            khetma_id = cursor.fetchone()["khetma_id"]
 
             chapters_data = [(khetma_id, chat_num) for chat_num in range(1, 31)]
 
-            cursor = conn.executemany(sql_insert_chapters, chapters_data)
+            cursor.executemany(sql_insert_chapters, chapters_data)
 
             return Khetma(khetma_id, khetma_num, Khetma.khetma_status.ACTIVE)
         
@@ -77,13 +65,13 @@ class KhetmaStorage:
         conditions = []
 
         if khetma_id:
-            conditions.append("khetma_id = ?")
+            conditions.append("khetma_id = %s")
             params.append(khetma_id)
         if khetma_number:
-            conditions.append("number = ?")
+            conditions.append("number = %s")
             params.append(khetma_number)
         if chat_id:
-            conditions.append("chat_id = ?")
+            conditions.append("chat_id = %s")
             params.append(chat_id)
 
         if conditions:
@@ -91,25 +79,25 @@ class KhetmaStorage:
         else:
             return None 
 
-        sql_chapters_command = "SELECT * FROM chapters WHERE khetma_id = ? ORDER BY number ASC"
+        sql_chapters_command = "SELECT * FROM chapters WHERE khetma_id = %s ORDER BY number ASC"
 
-        with self.db.managed_connection() as conn:
-            conn.row_factory = sqlite3.Row  # Access columns by name
+        with self.db.managed_connection() as cursor:
             
             # A. Fetch Khetma
-            khetma_cursor = conn.execute(sql_khetma_command, params)
-            khetma_row = khetma_cursor.fetchone()
+            cursor.execute(sql_khetma_command, params)
+            khetma_row = cursor.fetchone()
 
             if khetma_row is None:
                 return None
             
             # B. Fetch Chapters
-            chapter_cursor = conn.execute(sql_chapters_command, (khetma_row["khetma_id"],))
-            chapters_rows = chapter_cursor.fetchall()
+            cursor.execute(sql_chapters_command, (khetma_row["khetma_id"],))
+            chapters_rows = cursor.fetchall()
 
         chapters_list = []
         for ch_row in chapters_rows:
             chapter = Chapter(
+                parent_khetma= khetma_row["khetma_id"],
                 number=ch_row["number"],
                 owner_id=ch_row["owner_id"],
                 owner_username=ch_row["owner_username"], 
@@ -123,7 +111,17 @@ class KhetmaStorage:
             status=Khetma.khetma_status[khetma_row["status"].upper()],
             chapters=chapters_list
         )
+    
+    def get_khetmat_by_ids(self, khetma_ids: list) -> dict:
+        """Returns a dict of {khetma_id: khetma_number} for a list of IDs."""
 
+        placeholders = ",".join(["%s"] * len(khetma_ids))
+        sql = f"SELECT khetma_id, number FROM khetmat WHERE khetma_id IN ({placeholders})"
+        
+        with self.db.managed_connection() as cursor:
+            cursor.execute(sql, tuple(khetma_ids))
+            return {row["khetma_id"]: row["number"] for row in cursor.fetchall()}
+    
     def get_chapter(self, chapter_id=None, khetma_id=None, chapter_number=None) -> Chapter | None:
         """
         Fetches a single specific Chapter directly from the DB.
@@ -133,13 +131,13 @@ class KhetmaStorage:
         conditions = []
 
         if chapter_id:
-            conditions.append("chapter_id = ?")
+            conditions.append("chapter_id = %s")
             params.append(chapter_id)
         if khetma_id:
-            conditions.append("khetma_id = ?")
+            conditions.append("khetma_id = %s")
             params.append(khetma_id)
         if chapter_number:
-            conditions.append("number = ?")
+            conditions.append("number = %s")
             params.append(chapter_number)
 
         if conditions:
@@ -147,11 +145,10 @@ class KhetmaStorage:
         else:
             return None 
 
-        with self.db.managed_connection() as conn:
-            conn.row_factory = sqlite3.Row  # Access columns by name
+        with self.db.managed_connection() as cursor:
             
-            chapter_cursor = conn.execute(sql_chapter_command, params)
-            chapter_row = chapter_cursor.fetchone()
+            cursor.execute(sql_chapter_command, params)
+            chapter_row = cursor.fetchone()
 
             if not chapter_row:
                 return None
@@ -166,17 +163,16 @@ class KhetmaStorage:
 
     def get_chapters_by_user(self, user_id, khetma_id=None) -> list[Chapter]:
         
-        sql_command = "SELECT * FROM chapters WHERE owner_id = ?"
+        sql_command = "SELECT * FROM chapters WHERE owner_id = %s"
         params = [user_id]
         
         if khetma_id:
-            sql_command += " AND khetma_id= ?"
+            sql_command += " AND khetma_id= %s"
             params.append(khetma_id)
 
-        with self.db.managed_connection() as conn:
-            conn.row_factory = sqlite3.Row  # Access columns by name
+        with self.db.managed_connection() as cursor:
             
-            cursor = conn.execute(sql_command, params)
+            cursor.execute(sql_command, params)
             rows = cursor.fetchall()
 
             if not rows:
@@ -193,13 +189,13 @@ class KhetmaStorage:
         
         sql_command = """
             UPDATE khetmat 
-            SET status = ?,
-            number = ?
-            WHERE khetma_id = ?
+            SET status = %s,
+            number = %s
+            WHERE khetma_id = %s
         """
 
-        with self.db.managed_connection() as conn:
-            cursor = conn.execute(sql_command, (khetma.status.value.upper(), khetma.number, khetma.khetma_id))
+        with self.db.managed_connection() as cursor:
+            cursor.execute(sql_command, (khetma.status.value.upper(), khetma.number, khetma.khetma_id))
             return cursor.rowcount > 0 # True: the updating succeeded, Flase: the update failed
         
     def update_chapters(self, chapters: list[Chapter] | Chapter) -> bool:
@@ -215,29 +211,29 @@ class KhetmaStorage:
         # 3. Exactly ONE SQL string and ONE execution path
         sql_command = """
             UPDATE chapters 
-            SET status = ?, owner_id = ?, owner_username = ?
-            WHERE khetma_id = ? AND number = ?
+            SET status = %s, owner_id = %s, owner_username = %s
+            WHERE khetma_id = %s AND number = %s
         """
         
-        with self.db.managed_connection() as conn:
+        with self.db.managed_connection() as cursor:
             data_to_update = [
                 (chapter.status.value.upper(), chapter.owner_id, chapter.owner_username, chapter.parent_khetma, chapter.number)
                 for chapter in chapters
             ]
             
             # This works perfectly whether the list has 1 item or 30 items
-            cursor = conn.executemany(sql_command, data_to_update)
+            cursor.executemany(sql_command, data_to_update)
             
             return cursor.rowcount > 0
 
     def reserve_chapter(self, khetma_id, chapter_number, user_id, username) -> bool:
         sql_command = """
             UPDATE chapters
-            SET status = 'RESERVED', owner_id = ?, owner_username = ?
-            WHERE khetma_id = ? AND number = ? AND status = 'EMPTY'
+            SET status = 'RESERVED', owner_id = %s, owner_username = %s
+            WHERE khetma_id = %s AND number = %s AND status = 'EMPTY'
         """
-        with self.db.managed_connection() as conn:
-            cursor = conn.execute(sql_command, (user_id, username, khetma_id, chapter_number))
+        with self.db.managed_connection() as cursor:
+            cursor.execute(sql_command, (user_id, username, khetma_id, chapter_number))
             if cursor.rowcount > 0:
                 return True
             
@@ -251,16 +247,16 @@ class KhetmaStorage:
         sql_command = """
             UPDATE chapters
             SET status = 'EMPTY', owner_id = NULL, owner_username = NULL
-            WHERE khetma_id = ? AND number = ? AND status = 'RESERVED'
+            WHERE khetma_id = %s AND number = %s AND status = 'RESERVED'
         """
         params = [khetma_id, chapter_number] 
 
         if not is_admin:
-            sql_command += " AND owner_id = ?"
+            sql_command += " AND owner_id = %s"
             params.append(user_id) 
 
-        with self.db.managed_connection() as conn:
-            cursor = conn.execute(sql_command, params)
+        with self.db.managed_connection() as cursor:
+            cursor.execute(sql_command, params)
             if cursor.rowcount > 0:
                 return True
             
@@ -276,12 +272,12 @@ class KhetmaStorage:
     def finish_chapter(self, khetma_id, chapter_number, user_id, username) -> bool:
         sql_command = """
             UPDATE chapters
-            SET status = 'FINISHED', owner_id = ?, owner_username = ?
-            WHERE khetma_id = ? AND number = ? 
-            AND (status = 'EMPTY' OR (status = 'RESERVED' AND owner_id = ?))
+            SET status = 'FINISHED', owner_id = %s, owner_username = %s
+            WHERE khetma_id = %s AND number = %s 
+            AND (status = 'EMPTY' OR (status = 'RESERVED' AND owner_id = %s))
         """
-        with self.db.managed_connection() as conn:
-            cursor = conn.execute(sql_command, (user_id, username, khetma_id, chapter_number, user_id))
+        with self.db.managed_connection() as cursor:
+            cursor.execute(sql_command, (user_id, username, khetma_id, chapter_number, user_id))
             if cursor.rowcount > 0:
                 return True
 
@@ -292,23 +288,24 @@ class KhetmaStorage:
         elif chapter.is_reserved and user_id != chapter.owner_id:
             raise errors.ChapterNotOwnedError()
     
-    def finish_all_user_chapters(self, user_id, username, khetma_id=None) -> list[Chapter]:
+    def finish_all_user_chapters(self, chat_id, user_id, khetma_id=None) -> list[Chapter]:
         sql_command = """
             UPDATE chapters
             SET status = 'FINISHED'
-            WHERE owner_id = ? AND status = 'RESERVED'
+            WHERE owner_id = %s 
+            AND status = 'RESERVED'
+            AND khetma_id IN (SELECT khetma_id FROM khetmat WHERE chat_id = %s)
         """
-        params = [user_id] 
+        params = [user_id, chat_id] 
 
         if khetma_id:
-            sql_command += " AND khetma_id = ?"
+            sql_command += " AND khetma_id = %s"
             params.append(khetma_id)
 
         sql_command += " RETURNING *"
 
-        with self.db.managed_connection() as conn:
-            conn.row_factory = sqlite3.Row
-            cursor = conn.execute(sql_command, params)
+        with self.db.managed_connection() as cursor:
+            cursor.execute(sql_command, params)
             rows = cursor.fetchall()
             if not rows:
                 raise errors.NoOwnedChapters()
@@ -316,11 +313,11 @@ class KhetmaStorage:
             return [Chapter.from_db_row(row) for row in rows]
         
     def calc_finished_khetmat_number(self, chat_id) -> int:
-        sql_command = "SELECT COUNT(*) FROM khetmat WHERE chat_id = ? and status = 'FINISHED'"
+        sql_command = "SELECT COUNT(*) AS total FROM khetmat WHERE chat_id = %s AND status = 'FINISHED'"
         
-        with self.db.managed_connection() as conn:
-            cursor = conn.execute(sql_command, (chat_id,))
-            count = cursor.fetchone()[0]
+        with self.db.managed_connection() as cursor:
+            cursor.execute(sql_command, (chat_id,))
+            count = cursor.fetchone()["total"]
             return count + 1
     
     def calc_next_khetma_number(self, chat_id: int) -> int:
@@ -332,10 +329,10 @@ class KhetmaStorage:
         # COALESCE(MAX(number), 0) handles two cases:
         # 1. No khetmas exist -> MAX is NULL -> COALESCE returns 0 -> Result: 1
         # 2. Max is 5 -> Returns 5 -> Result: 6
-        sql = "SELECT COALESCE(MAX(number), 0) + 1 FROM khetmat WHERE chat_id = ?"
+        sql = "SELECT COALESCE(MAX(number), 0) + 1 AS next_num FROM khetmat WHERE chat_id = %s"
         
-        with self.db.managed_connection() as conn:
-            cursor = conn.execute(sql, (chat_id,))
-            return cursor.fetchone()[0]
+        with self.db.managed_connection() as cursor:
+            cursor.execute(sql, (chat_id,))
+            return cursor.fetchone()["next_num"]
         
 

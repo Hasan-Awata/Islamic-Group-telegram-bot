@@ -1,10 +1,12 @@
 import logging
 from telegram import Update
+from telegram import error as TelegramErrors
 from telegram.ext import ContextTypes
 
 # Database calls
-from storage_manager import StorageManager, DATABASE
+from storage_manager import StorageManager
 from features.group_khetma.khetma_storage import KhetmaStorage
+from features.group_khetma import errors
 
 # Local modules
 from bot_setup import bot_app
@@ -19,9 +21,17 @@ async def global_error_handler(update: object, context: ContextTypes.DEFAULT_TYP
     
     error = context.error
     
+    # IGNORE: BadRequest errors
+    if isinstance(error, TelegramErrors.BadRequest):
+        return
+
+    # IGNORE: Custom errors
+    if isinstance(error, errors.KhetmaError):
+        return
+
     # Log the exact error and line number centrally to bot_activity.log
     logger.error(f"An error occurred: {error}", exc_info=True)
-    
+
     # (Optional) Send a generic fallback message to the user
     if isinstance(update, Update) and update.effective_message:
         await update.effective_message.reply_text("عذراً، حدث خطأ غير متوقع في النظام. تم إبلاغ المطور.")
@@ -41,7 +51,7 @@ def main(argv=None):
     bot_app.add_error_handler(global_error_handler)
     
     # Initialize Database
-    db_core = StorageManager(DATABASE)
+    db_core = StorageManager()
     
     # Khetma feature storage wrapper
     khetma_storage_engine = KhetmaStorage(db_core)
@@ -53,9 +63,12 @@ def main(argv=None):
     # ==================================================================
     bot_app.bot_data["khetma_storage"] = khetma_storage_engine
     
-    # Register your command and message handlers
+    # Main commands:
     main_commands_handler()
-        
+    
+    # Feature/ Khetma(Group reading session):
+    khetma_handlers()
+    
     logger.info("Starting Telegram Bot...")
     bot_app.run_polling(drop_pending_updates=True)
 

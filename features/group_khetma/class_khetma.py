@@ -1,5 +1,4 @@
 from enum import Enum
-from typing import List, Dict, Any
 
 # project modules
 from features.group_khetma.class_chapter import Chapter 
@@ -20,7 +19,7 @@ class Khetma:
 
     @property
     def is_finished(self):
-        return len(self.get_reserved_chapters()) == 30
+        return len(self.get_finished_chapters()) == 30
     
     def get_chapter(self, chapter_num) -> Chapter | None:
         if 1 <= chapter_num <= 30:

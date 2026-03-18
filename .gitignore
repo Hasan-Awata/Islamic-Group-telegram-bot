@@ -3,6 +3,7 @@ __pycache__/
 .env
 *.db
 *.sqlite
+*.log
 /gather_project.py
 /project_context_code.txt
 /.vscode

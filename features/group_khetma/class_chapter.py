@@ -1,5 +1,4 @@
 from enum import Enum
-from typing import Any
 
 class Chapter:    
     class chapter_status(Enum):
@@ -41,7 +40,7 @@ class Chapter:
     
     @classmethod
     def from_db_row(cls, row) -> 'Chapter':
-        """Factory: Converts a DB row (sqlite3.Row) into a Chapter object."""
+        """Factory: Converts a DB row (RealDictRow) into a Chapter object."""
         return cls(
             parent_khetma=row["khetma_id"],
             number=row["number"],
