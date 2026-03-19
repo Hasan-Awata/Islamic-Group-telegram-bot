@@ -15,7 +15,10 @@ class Khetma:
         if chapters:
             self.chapters = chapters
         else:
-            self.chapters = [Chapter(khetma_id, chapter_num, None, Chapter.chapter_status.EMPTY) for chapter_num in range(1, 31)] 
+            self.chapters = [
+            Chapter(khetma_id, chapter_num, None, Chapter.chapter_status.EMPTY)
+            for chapter_num in range(1, 31)
+        ] 
 
     @property
     def is_finished(self):
@@ -26,29 +29,17 @@ class Khetma:
             return self.chapters[chapter_num - 1]
         return None
             
+    def _get_chapters_by_status(self, status) -> list[Chapter]:
+        return [ch for ch in self.chapters if ch.status == status]
+
     def get_reserved_chapters(self) -> list[Chapter]:
-        reserved_chapters = []
-        for chapter in self.chapters:
-            if chapter.is_reserved:
-                reserved_chapters.append(chapter)
-        
-        return reserved_chapters
+        return self._get_chapters_by_status(Chapter.chapter_status.RESERVED)
 
     def get_finished_chapters(self) -> list[Chapter]:
-        finished_chapters = []
-        for chapter in self.chapters:
-            if chapter.is_finished:
-                finished_chapters.append(chapter)
-        
-        return finished_chapters
-    
-    def get_available_chapters(self) -> list[Chapter]:
-        available_chapters = []
-        for chapter in self.chapters:
-            if chapter.is_available:
-                available_chapters.append(chapter)
+        return self._get_chapters_by_status(Chapter.chapter_status.FINISHED)
 
-        return available_chapters
+    def get_available_chapters(self) -> list[Chapter]:
+        return self._get_chapters_by_status(Chapter.chapter_status.EMPTY)
     
     def reserve_chapter(self, user_id, username, chapter_num) -> bool:
         chapter = self.get_chapter(chapter_num)

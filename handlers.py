@@ -13,7 +13,14 @@ def khetma_handlers():
     # Khetma Feature Handlers
     bot_app.add_handler(CommandHandler("new_khetma", start_khetma_command))
 
-    bot_app.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, finish_message_handler))
-
-    bot_app.add_handler(CallbackQueryHandler(handle_khetma_buttons, pattern="^reserve_"))
-    bot_app.add_handler(CallbackQueryHandler(handle_khetma_buttons, pattern="^info_"))
+    bot_app.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, finish_message_handler), group=0)
+    bot_app.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, my_chapters_handler), group=1)
+    bot_app.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, available_chapters_handler), group=2)
+    bot_app.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, admin_withdraw_handler), group=3)
+    bot_app.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, remind_handler), group=4)
+    
+    bot_app.add_handler(CallbackQueryHandler(handle_khetma_buttons, pattern="^reserve"))
+    bot_app.add_handler(CallbackQueryHandler(handle_khetma_buttons, pattern="^info"))
+    bot_app.add_handler(CallbackQueryHandler(handle_khetma_buttons, pattern="^finish_all"))
+    bot_app.add_handler(CallbackQueryHandler(handle_khetma_buttons, pattern="^my_chapters"))
+    bot_app.add_handler(CallbackQueryHandler(handle_khetma_buttons, pattern="^withdraw_all"))

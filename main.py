@@ -1,4 +1,5 @@
 import logging
+import os
 from telegram import Update
 from telegram import error as TelegramErrors
 from telegram.ext import ContextTypes
@@ -70,7 +71,13 @@ def main(argv=None):
     khetma_handlers()
     
     logger.info("Starting Telegram Bot...")
+
     bot_app.run_polling(drop_pending_updates=True)
+    # bot_app.run_webhook(
+    # listen="0.0.0.0",
+    # port=int(os.environ.get("PORT", 8443)),
+    # webhook_url=WEBHOOK_URL  # e.g. https://yourapp.railway.app/webhook
+    # )
 
 if __name__ == "__main__":
     main()

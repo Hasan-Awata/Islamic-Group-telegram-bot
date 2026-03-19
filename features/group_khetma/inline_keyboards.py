@@ -15,7 +15,7 @@ def render_khetma_keyboard(khetma: Khetma):
         # 1. Determine Text & Action
         if chapter.status.name == "FINISHED": # Use .name if Enum
             text = "✅"
-            callback_data = "noop" # No operation (clicking does nothing)
+            callback_data = f"info_{khetma.khetma_id}_{chapter.number}"
         
         elif chapter.status.name == "RESERVED":
             text = "⬜"
@@ -34,4 +34,22 @@ def render_khetma_keyboard(khetma: Khetma):
             keyboard.append(row)
             row = [] 
     
+    keyboard.append([
+        InlineKeyboardButton(
+            text="قرأت جميع أجزائي ✅",
+            callback_data=f"finish_all_{khetma.khetma_id}"
+        )
+    ])
+
+    keyboard.append([
+        InlineKeyboardButton(
+            text="أجزائي 📋",
+            callback_data=f"my_chapters_{khetma.khetma_id}"
+        ),
+        InlineKeyboardButton(
+            text="سحب أجزائي 🔄",
+            callback_data=f"withdraw_all_{khetma.khetma_id}"
+        )
+    ])
+        
     return InlineKeyboardMarkup(keyboard)

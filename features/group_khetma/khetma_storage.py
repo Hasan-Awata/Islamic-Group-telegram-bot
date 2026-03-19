@@ -35,23 +35,24 @@ class KhetmaStorage:
             ''')
 
     def create_new_khetma(self, chat_id) -> Khetma:
-        # 1. Ensure the Parent exists (The "Safety Net")
         sql_insert_chat = "INSERT INTO chats (chat_id) VALUES (%s) ON CONFLICT DO NOTHING"
         
-        # 2. Insert the Child (The actual Khetma)
-        sql_insert_khetma = "INSERT INTO khetmat (chat_id, number, status) VALUES (%s, %s, 'ACTIVE') RETURNING khetma_id"
+        sql_insert_khetma = """
+            INSERT INTO khetmat (chat_id, number, status)
+            VALUES (%s, COALESCE((SELECT MAX(number) FROM khetmat WHERE chat_id = %s), 0) + 1, 'ACTIVE')
+            RETURNING khetma_id, number
+        """
 
         sql_insert_chapters = "INSERT INTO chapters (khetma_id, number, status) VALUES (%s, %s, 'EMPTY')"
 
-        khetma_num = self.calc_next_khetma_number(chat_id)
-
         with self.db.managed_connection() as cursor:
             cursor.execute(sql_insert_chat, (chat_id,))
-            cursor.execute(sql_insert_khetma, (chat_id, khetma_num))
-            khetma_id = cursor.fetchone()["khetma_id"]
+            cursor.execute(sql_insert_khetma, (chat_id, chat_id))
+            row = cursor.fetchone()
+            khetma_id = row["khetma_id"]
+            khetma_num = row["number"]
 
-            chapters_data = [(khetma_id, chat_num) for chat_num in range(1, 31)]
-
+            chapters_data = [(khetma_id, num) for num in range(1, 31)]
             cursor.executemany(sql_insert_chapters, chapters_data)
 
             return Khetma(khetma_id, khetma_num, Khetma.khetma_status.ACTIVE)
@@ -94,23 +95,7 @@ class KhetmaStorage:
             cursor.execute(sql_chapters_command, (khetma_row["khetma_id"],))
             chapters_rows = cursor.fetchall()
 
-        chapters_list = []
-        for ch_row in chapters_rows:
-            chapter = Chapter(
-                parent_khetma= khetma_row["khetma_id"],
-                number=ch_row["number"],
-                owner_id=ch_row["owner_id"],
-                owner_username=ch_row["owner_username"], 
-                status=Chapter.chapter_status[ch_row["status"].upper()]
-            )
-            chapters_list.append(chapter)
-
-        return Khetma(
-            khetma_id=khetma_row["khetma_id"],
-            number=khetma_row["number"],
-            status=Khetma.khetma_status[khetma_row["status"].upper()],
-            chapters=chapters_list
-        )
+        return Khetma.from_db_row(khetma_row, chapters_rows)
     
     def get_khetmat_by_ids(self, khetma_ids: list) -> dict:
         """Returns a dict of {khetma_id: khetma_number} for a list of IDs."""
@@ -121,6 +106,35 @@ class KhetmaStorage:
         with self.db.managed_connection() as cursor:
             cursor.execute(sql, tuple(khetma_ids))
             return {row["khetma_id"]: row["number"] for row in cursor.fetchall()}
+    
+    def get_active_khetmat(self, chat_id) -> list[Khetma]:
+        """Returns all ACTIVE khetmat in a chat with their chapters."""
+        sql_khetmat = "SELECT * FROM khetmat WHERE chat_id = %s AND status = 'ACTIVE'"
+
+        with self.db.managed_connection() as cursor:
+            cursor.execute(sql_khetmat, (chat_id,))
+            khetma_rows = cursor.fetchall()
+
+            if not khetma_rows:
+                return []
+
+            khetma_ids = [row["khetma_id"] for row in khetma_rows]
+            placeholders = ",".join(["%s"] * len(khetma_ids))
+            cursor.execute(
+                f"SELECT * FROM chapters WHERE khetma_id IN ({placeholders}) ORDER BY khetma_id, number ASC",
+                tuple(khetma_ids)
+            )
+            chapters_rows = cursor.fetchall()
+
+        # Group chapters by khetma_id
+        chapters_by_khetma = {}
+        for ch_row in chapters_rows:
+            chapters_by_khetma.setdefault(ch_row["khetma_id"], []).append(ch_row)
+
+        return [
+            Khetma.from_db_row(khetma_row, chapters_by_khetma.get(khetma_row["khetma_id"], []))
+            for khetma_row in khetma_rows
+        ]
     
     def get_chapter(self, chapter_id=None, khetma_id=None, chapter_number=None) -> Chapter | None:
         """
@@ -153,37 +167,33 @@ class KhetmaStorage:
             if not chapter_row:
                 return None
 
-        return Chapter(
-            parent_khetma=chapter_row["khetma_id"],
-            number=chapter_row["number"],
-            owner_id=chapter_row["owner_id"],
-            owner_username=chapter_row["owner_username"], 
-            status=Chapter.chapter_status[chapter_row["status"].upper()]
-        )
+        return Chapter.from_db_row(chapter_row)
 
-    def get_chapters_by_user(self, user_id, khetma_id=None) -> list[Chapter]:
+    def get_chapters_by_user(self, user_id, chat_id=None, khetma_id=None) -> list[Chapter]:
         
-        sql_command = "SELECT * FROM chapters WHERE owner_id = %s"
+        sql_command = """
+            SELECT * FROM chapters 
+            WHERE owner_id = %s
+            AND status = 'RESERVED'
+        """
         params = [user_id]
         
+        if chat_id:
+            sql_command += " AND khetma_id IN (SELECT khetma_id FROM khetmat WHERE chat_id = %s)"
+            params.append(chat_id)
+
         if khetma_id:
-            sql_command += " AND khetma_id= %s"
+            sql_command += " AND khetma_id = %s"
             params.append(khetma_id)
 
         with self.db.managed_connection() as cursor:
-            
             cursor.execute(sql_command, params)
             rows = cursor.fetchall()
 
             if not rows:
                 raise errors.NoOwnedChapters()
             
-            chapters_list = []
-            for row in rows:
-                chapter = Chapter.from_db_row(row)
-                chapters_list.append(chapter)
-
-            return chapters_list 
+            return [Chapter.from_db_row(row) for row in rows]
 
     def update_khetma(self, khetma: Khetma):
         
@@ -230,7 +240,7 @@ class KhetmaStorage:
         sql_command = """
             UPDATE chapters
             SET status = 'RESERVED', owner_id = %s, owner_username = %s
-            WHERE khetma_id = %s AND number = %s AND status = 'EMPTY'
+            WHERE khetma_id = %s AND number = %s AND status = 'EMPTY' 
         """
         with self.db.managed_connection() as cursor:
             cursor.execute(sql_command, (user_id, username, khetma_id, chapter_number))
@@ -238,6 +248,7 @@ class KhetmaStorage:
                 return True
             
         chapter = self.get_chapter(khetma_id=khetma_id, chapter_number=chapter_number)
+
         if chapter.is_reserved:
             raise errors.ChapterAlreadyReservedError()
         elif chapter.is_finished: 
@@ -263,11 +274,35 @@ class KhetmaStorage:
         chapter = self.get_chapter(khetma_id=khetma_id, chapter_number=chapter_number)
         if chapter.is_available:
             raise errors.ChapterAlreadyEmptyError()
-        elif chapter.is_finished and not is_admin: 
+        elif chapter.is_finished: 
             raise errors.ChapterFinishedError()
         elif chapter.is_reserved and not is_admin:
             if user_id != chapter.owner_id:
                 raise errors.ChapterNotOwnedError()
+
+    def withdraw_all_user_chapters(self, chat_id, user_id, khetma_id=None) -> list[Chapter]:
+        sql_command = """
+            UPDATE chapters
+            SET status = 'EMPTY', owner_id = NULL, owner_username = NULL
+            WHERE owner_id = %s
+            AND status = 'RESERVED'
+            AND khetma_id IN (SELECT khetma_id FROM khetmat WHERE chat_id = %s)
+        """
+        params = [user_id, chat_id]
+
+        if khetma_id:
+            sql_command += " AND khetma_id = %s"
+            params.append(khetma_id)
+
+        sql_command += " RETURNING *"
+
+        with self.db.managed_connection() as cursor:
+            cursor.execute(sql_command, params)
+            rows = cursor.fetchall()
+            if not rows:
+                raise errors.NoOwnedChapters()
+
+            return [Chapter.from_db_row(row) for row in rows]
     
     def finish_chapter(self, khetma_id, chapter_number, user_id, username) -> bool:
         sql_command = """
