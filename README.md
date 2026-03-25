@@ -44,7 +44,7 @@ This project was built with professional backend engineering principles in mind:
 
 1. Clone the repository:
 ```bash
-   git clone https://github.com/YourUsername/YourRepoName.git
+   git clone https://github.com/Hasan-Awata/Islamic-Group-telegram-bot
 ```
 
 2. Install the required dependencies:

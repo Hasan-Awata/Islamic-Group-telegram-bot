@@ -10,7 +10,7 @@ from features.group_khetma.khetma_storage import KhetmaStorage
 from features.group_khetma import errors
 
 # Local modules
-from bot_setup import bot_app
+from bot_setup import bot_app, WEBHOOK_URL
 from handlers import *
 
 # 1. Create a logger object for this specific file
@@ -72,12 +72,13 @@ def main(argv=None):
     
     logger.info("Starting Telegram Bot...")
 
-    bot_app.run_polling(drop_pending_updates=True)
-    # bot_app.run_webhook(
-    # listen="0.0.0.0",
-    # port=int(os.environ.get("PORT", 8443)),
-    # webhook_url=WEBHOOK_URL  # e.g. https://yourapp.railway.app/webhook
-    # )
+    # bot_app.run_polling(drop_pending_updates=True) # For local testing ...
+    
+    bot_app.run_webhook(
+    listen="0.0.0.0",
+    port=int(os.environ.get("PORT", 8443)),
+    webhook_url=WEBHOOK_URL  # e.g. https://yourapp.railway.app/webhook
+    )
 
 if __name__ == "__main__":
     main()
