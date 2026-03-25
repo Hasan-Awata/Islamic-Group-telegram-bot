@@ -1,15 +1,58 @@
-from telegram.ext import CommandHandler, MessageHandler, filters
+import logging
+import os
+from telegram import Update
+from telegram import error as TelegramErrors
+from telegram.ext import ContextTypes
 
 # Database calls
-from storage_manager import StorageManager, DATABASE
+from storage_manager import StorageManager
 from features.group_khetma.khetma_storage import KhetmaStorage
+from features.group_khetma import errors
 
 # Local modules
-from bot_setup import bot_app
+from bot_setup import bot_app, WEBHOOK_URL
 from handlers import *
 
+# 1. Create a logger object for this specific file
+logger = logging.getLogger(__name__)
+
+# 2. Write your "Middleware" function
+async def global_error_handler(update: object, context: ContextTypes.DEFAULT_TYPE):
+    """Log the error globally and send a fallback message if needed."""
+    
+    error = context.error
+    
+    # IGNORE: BadRequest errors
+    if isinstance(error, TelegramErrors.BadRequest):
+        return
+
+    # IGNORE: Custom errors
+    if isinstance(error, errors.KhetmaError):
+        return
+
+    # Log the exact error and line number centrally to bot_activity.log
+    logger.error(f"An error occurred: {error}", exc_info=True)
+
+    # (Optional) Send a generic fallback message to the user
+    if isinstance(update, Update) and update.effective_message:
+        await update.effective_message.reply_text("عذراً، حدث خطأ غير متوقع في النظام. تم إبلاغ المطور.")
+
 def main(argv=None):
-    db_core = StorageManager(DATABASE)
+    # 1. Configure the logging system globally (FIRST THING!)
+    logging.basicConfig(
+        format='%(asctime)s - %(name)s - %(levelname)s - %(message)s',
+        level=logging.INFO, # Ignore DEBUG, record everything INFO and above
+        handlers=[
+            logging.FileHandler("bot_activity.log", encoding='utf-8'), # Save to file safely
+            logging.StreamHandler() # Also print to your VS Code terminal
+        ]
+    )
+
+    # Attach the global error middleware
+    bot_app.add_error_handler(global_error_handler)
+    
+    # Initialize Database
+    db_core = StorageManager()
     
     # Khetma feature storage wrapper
     khetma_storage_engine = KhetmaStorage(db_core)
@@ -21,29 +64,21 @@ def main(argv=None):
     # ==================================================================
     bot_app.bot_data["khetma_storage"] = khetma_storage_engine
     
+    # Main commands:
     main_commands_handler()
-        
-    # # When user types /help -> run help_command()
-    # bot_app.add_handler(CommandHandler("help", help_command))
     
-    # # When user types /clear -> run clear_command()
-    # bot_app.add_handler(CommandHandler("clear", clear_command))
+    # Feature/ Khetma(Group reading session):
+    khetma_handlers()
+    
+    logger.info("Starting Telegram Bot...")
 
-    # # When user types /translate -> run translate_command()
-    # bot_app.add_handler(CommandHandler("translate", translate_command))
-
-    # # When user types /games -> run games_command()
-    # bot_app.add_handler(CommandHandler("games", games_command))
-
-    # # Register the games callback handlers (Must be BEFORE MessageHandler)
-    # bot_app.add_handlers(games_handlers)
-
-    # # When user sends Text AND it is NOT a command -> run handle_message()
-    # # (The tilde '~' means NOT)
-    # bot_app.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, handle_message))
-
-    print("Dullani Bot Running...")
-    bot_app.run_polling(drop_pending_updates=True)
+    # bot_app.run_polling(drop_pending_updates=True) # For local testing ...
+    
+    bot_app.run_webhook(
+    listen="0.0.0.0",
+    port=int(os.environ.get("PORT", 8443)),
+    webhook_url=WEBHOOK_URL  # e.g. https://yourapp.railway.app/webhook
+    )
 
 if __name__ == "__main__":
     main()

@@ -3,7 +3,7 @@ from telegram.constants import ChatMemberStatus
 from telegram.ext import ContextTypes
 
 # Local imports
-from class_khetma import Khetma
+from features.group_khetma.class_khetma import Khetma
 
 async def is_user_admin(chat_id: int, user_id: int, context: ContextTypes.DEFAULT_TYPE) -> bool:
     """
@@ -260,26 +260,20 @@ def number_to_ordinal_arabic(n: int) -> str:
 
 
 def create_khetma_message(khetma: Khetma) -> str:
-    chapters_text = ""
-
-    for chapter in khetma.chapters:
-        # Handle chapter status
-        if chapter.status.value == "FINISHED":
-            status = "✅"
-        elif chapter.status.value == "RESERVED":
-            status = f"{chapter.owner_username}"  
+    available = reserved = finished = 0
+    for ch in khetma.chapters:
+        if ch.is_available:
+            available += 1
+        elif ch.is_reserved:
+            reserved += 1
         else:
-            status = "" 
+            finished += 1
 
-        # Build the line
-        chapters_text += f"الجزء {number_to_ordinal_arabic(chapter.number)} : {status}\n"
-
-    # Construct the final block
     message = (
-        f"**الختمة رقم -> {khetma.number}**"
-        f"**الحالة: {"مستمرة" if khetma.status.value == "ACTIVE" else "منتهية"}**"
-        f"\n------------------\n"
-        f"{chapters_text}"
+        f"**الختمة رقم -> {khetma.number} | {"مستمرة" if khetma.status.value == "ACTIVE" else "منتهية"}**\n"
+        f"الأجزاء المتاحة: {available}\n"
+        f"الأجزاء المحجوزة ⬜: {reserved}\n"
+        f"الأجزاء المنتهية ✅: {finished}\n"
     )
-    
-    return message  
+
+    return message 
