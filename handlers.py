@@ -6,8 +6,8 @@ from features.group_khetma.khetma_handlers import *
 from bot_setup import bot_app
 
 def main_commands_handler():
-    # /start
     bot_app.add_handler(CommandHandler("start", start_command))
+    bot_app.add_handler(CommandHandler("help", help_command))
 
 def khetma_handlers(): 
     # Khetma Feature Handlers

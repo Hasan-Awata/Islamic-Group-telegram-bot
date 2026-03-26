@@ -1,3 +1,4 @@
+import time
 from telegram import  Update
 from telegram import  error as TelegramError
 from telegram.ext import ContextTypes
@@ -408,6 +409,24 @@ async def handle_khetma_buttons(update: Update, context: ContextTypes.DEFAULT_TY
     chat_id = update.effective_chat.id
     storage: KhetmaStorage = context.bot_data["khetma_storage"]
 
+    # ==========================================
+    # SPAM PROTECTION (RATE LIMITING)
+    # ==========================================
+    current_time = time.time()
+    last_click = context.user_data.get("last_button_click", 0)
+    
+    # Require a 1.5-second cooldown between button presses
+    if current_time - last_click < 1.5:
+        await query.answer(errors.RateLimitError("الرجاء عدم الضغط على الأزرار بشكل عشوائي وسريع ⚠️").message, show_alert=False)
+        return
+        
+    # Update their last click time to right now
+    context.user_data["last_button_click"] = current_time
+    # ==========================================
+
+    chat_id = update.effective_chat.id
+    storage: KhetmaStorage = context.bot_data["khetma_storage"]
+    
     if query.data.startswith("finish_all_"):
         await _handle_finish_all(query, user, chat_id, storage, context)
         return
