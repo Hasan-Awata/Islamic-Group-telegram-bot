@@ -34,6 +34,26 @@ class KhetmaStorage:
                 );
             ''')
 
+    def set_chat_active(self, chat_id: int, active: bool) -> bool:
+        """Activates or deactivates a chat in the database."""
+        sql_command = """
+            INSERT INTO chats (chat_id, is_active) 
+            VALUES (%s, %s) 
+            ON CONFLICT (chat_id) 
+            DO UPDATE SET is_active = EXCLUDED.is_active
+        """
+        with self.db.managed_connection() as cursor:
+            cursor.execute(sql_command, (chat_id, active))
+            return cursor.rowcount > 0
+
+    def is_chat_active(self, chat_id: int) -> bool:
+        """Checks if a chat is allowed to use the bot."""
+        sql_command = "SELECT is_active FROM chats WHERE chat_id = %s"
+        with self.db.managed_connection() as cursor:
+            cursor.execute(sql_command, (chat_id,))
+            row = cursor.fetchone()
+            return row["is_active"] if row else False
+        
     def create_new_khetma(self, chat_id) -> Khetma:
         sql_insert_chat = "INSERT INTO chats (chat_id) VALUES (%s) ON CONFLICT DO NOTHING"
         

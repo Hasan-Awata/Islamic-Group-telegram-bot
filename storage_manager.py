@@ -35,6 +35,7 @@ class StorageManager:
         with self.managed_connection() as cursor:
             cursor.execute('''
                 CREATE TABLE IF NOT EXISTS chats(
-                    chat_id BIGINT PRIMARY KEY
+                    chat_id BIGINT PRIMARY KEY,
+                    is_active BOOLEAN DEFAULT FALSE
                 )
             ''')

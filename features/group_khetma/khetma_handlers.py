@@ -42,6 +42,44 @@ async def start_khetma_command(update: Update, context: ContextTypes.DEFAULT_TYP
     except TelegramError.BadRequest as err:
         pass
 
+async def activate_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    chat_id = update.effective_chat.id
+    user_id = update.effective_user.id
+    
+    if not await utilities.is_user_admin(chat_id, user_id, context):
+        await update.message.reply_text("🔒 عذراً، هذا الأمر متاح للمشرفين فقط.")
+        return
+
+    # Update Database
+    storage = context.bot_data["khetma_storage"]
+    storage.set_chat_active(chat_id, True)
+    
+    # Update RAM Cache instantly
+    if "active_chats_cache" not in context.bot_data:
+        context.bot_data["active_chats_cache"] = {}
+    context.bot_data["active_chats_cache"][chat_id] = True
+
+    await update.message.reply_text("✅ تم تفعيل البوت في هذه المجموعة بنجاح! يمكنكم الآن البدء.")
+
+async def deactivate_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    chat_id = update.effective_chat.id
+    user_id = update.effective_user.id
+    
+    if not await utilities.is_user_admin(chat_id, user_id, context):
+        await update.message.reply_text("🔒 عذراً، هذا الأمر متاح للمشرفين فقط.")
+        return
+
+    # Update Database
+    storage = context.bot_data["khetma_storage"]
+    storage.set_chat_active(chat_id, False)
+    
+    # Update RAM Cache instantly
+    if "active_chats_cache" not in context.bot_data:
+        context.bot_data["active_chats_cache"] = {}
+    context.bot_data["active_chats_cache"][chat_id] = False
+
+    await update.message.reply_text("⏸️ تم إيقاف البوت في هذه المجموعة. لن يقوم بقراءة أي رسائل بعد الآن.")
+
 async def finish_message_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
     message_text = update.message.text or ""
     words = message_text.split()
